@@ -5467,6 +5467,33 @@ impl Window {
                 self.mouse_position = touch_drag.start_position;
                 PlatformInput::TouchDrag(touch_drag)
             }
+            PlatformInput::CustomDrag(custom_drag) => match custom_drag {
+                crate::CustomDragEvent::Entered { position, .. }
+                | crate::CustomDragEvent::Pending { position } => {
+                    self.mouse_position = position;
+                    PlatformInput::MouseMove(MouseMoveEvent {
+                        position,
+                        pressed_button: Some(MouseButton::Left),
+                        modifiers: Modifiers::default(),
+                    })
+                }
+                crate::CustomDragEvent::Submit { position, .. } => {
+                    cx.activate(true);
+                    self.mouse_position = position;
+                    PlatformInput::MouseUp(MouseUpEvent {
+                        button: MouseButton::Left,
+                        position,
+                        modifiers: Modifiers::default(),
+                        click_count: 1,
+                    })
+                }
+                crate::CustomDragEvent::Exited => {
+                    PlatformInput::CustomDrag(crate::CustomDragEvent::Exited)
+                }
+                crate::CustomDragEvent::Ended => {
+                    PlatformInput::CustomDrag(crate::CustomDragEvent::Ended)
+                }
+            },
             PlatformInput::KeyDown(_) | PlatformInput::KeyUp(_) => event,
         };
 

@@ -8,11 +8,11 @@ use anyhow::Result;
 use block2::RcBlock;
 use dispatch2::DispatchQueue;
 use gpui::{
-    AnyWindowHandle, BackgroundExecutor, Bounds, Capslock, CursorStyle, ExternalDragPayload,
-    ExternalPaths, FileDropEvent, ForegroundExecutor, KeyDownEvent, Keystroke, Modifiers,
-    ModifiersChangedEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels,
-    PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point,
-    PromptButton, PromptLevel, RequestFrameOptions, SharedString, Size, SystemWindowTab,
+    AnyWindowHandle, BackgroundExecutor, Bounds, Capslock, CursorStyle, CustomDragEvent,
+    ExternalDragPayload, ExternalPaths, FileDropEvent, ForegroundExecutor, KeyDownEvent, Keystroke,
+    Modifiers, ModifiersChangedEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
+    Pixels, PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow,
+    Point, PromptButton, PromptLevel, RequestFrameOptions, SharedString, Size, SystemWindowTab,
     WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowKind,
     WindowParams, point, px, size,
 };
@@ -41,7 +41,7 @@ use objc2_app_kit::{
     NSWindowOcclusionState, NSWindowOrderingMode, NSWindowStyleMask, NSWindowTitleVisibility,
 };
 use objc2_foundation::{
-    NSInteger, NSNotFound, NSOperatingSystemVersion, NSPoint as Objc2NSPoint, NSRange,
+    NSData, NSInteger, NSNotFound, NSOperatingSystemVersion, NSPoint as Objc2NSPoint, NSRange,
     NSRangePointer, NSRect as Objc2NSRect, NSSize, NSString, NSUInteger,
 };
 use parking_lot::Mutex;
@@ -86,6 +86,26 @@ fn ns_string(value: &str) -> Retained<NSString> {
 
 fn filenames_pboard_type() -> Retained<NSString> {
     ns_string("NSFilenamesPboardType")
+}
+
+fn custom_drag_pboard_type() -> Retained<NSString> {
+    ns_string("org.gpui.custom-drag")
+}
+
+fn encode_custom_drag_payload(type_name: &str, data: &[u8]) -> Vec<u8> {
+    let name = type_name.as_bytes();
+    let mut encoded = Vec::with_capacity(4 + name.len() + data.len());
+    encoded.extend_from_slice(&(name.len() as u32).to_be_bytes());
+    encoded.extend_from_slice(name);
+    encoded.extend_from_slice(data);
+    encoded
+}
+
+fn decode_custom_drag_payload(bytes: &[u8]) -> Option<(String, Vec<u8>)> {
+    let length = u32::from_be_bytes(bytes.get(..4)?.try_into().ok()?) as usize;
+    let name = bytes.get(4..4 + length)?;
+    let data = bytes.get(4 + length..)?.to_vec();
+    Some((String::from_utf8(name.to_vec()).ok()?, data))
 }
 
 fn invalid_ns_range() -> NSRange {
@@ -1235,8 +1255,10 @@ impl MacWindow {
             );
             assert!(!native_window.is_null());
             let filenames_type = filenames_pboard_type();
-            let dragged_types: ObjcId =
-                msg_send![class!(NSArray), arrayWithObject: &*filenames_type];
+            let custom_type = custom_drag_pboard_type();
+            let dragged_types: ObjcId = msg_send![class!(NSMutableArray), array];
+            let _: () = msg_send![dragged_types, addObject: &*filenames_type];
+            let _: () = msg_send![dragged_types, addObject: &*custom_type];
             let () = msg_send![native_window, registerForDraggedTypes: dragged_types];
             let () = msg_send![
                 native_window,
@@ -2258,11 +2280,7 @@ impl PlatformWindow for MacWindow {
     }
 
     fn start_external_drag(&self, payload: &ExternalDragPayload) -> bool {
-        let ExternalDragPayload::Files(paths) = payload else {
-            log::warn!("custom native drag payload is not implemented yet");
-            return false;
-        };
-        if paths.entries().is_empty() {
+        if matches!(payload, ExternalDragPayload::Files(paths) if paths.entries().is_empty()) {
             log::warn!("start_external_drag declined: no paths");
             return false;
         }
@@ -2297,66 +2315,95 @@ impl PlatformWindow for MacWindow {
                 NSSize::new(32., 32.),
             );
 
-            for (path, is_directory) in paths.entries() {
-                // Preserve non-UTF-8 paths
-                let Ok(path_bytes) = CString::new(path.as_os_str().as_bytes()) else {
-                    log::warn!("start_external_drag skipped path containing an interior nul byte");
-                    continue;
-                };
-
-                let url: ObjcId = msg_send![
-                    class!(NSURL),
-                    fileURLWithFileSystemRepresentation: path_bytes.as_ptr(),
-                    isDirectory: Bool::new(*is_directory),
-                    relativeToURL: NIL
-                ];
-
-                if url.is_null() {
-                    log::warn!("start_external_drag skipped path with NIL NSURL");
-                    continue;
+            if let ExternalDragPayload::Custom { type_name, data } = payload {
+                if type_name.is_empty() || data.is_empty() {
+                    log::warn!("start_external_drag declined: empty custom payload");
+                    return false;
                 }
-
-                let item: ObjcId = msg_send![class!(NSDraggingItem), alloc];
-                let item: ObjcId = msg_send![item, initWithPasteboardWriter: url];
-                if item.is_null() {
-                    log::warn!("start_external_drag declined: NSDraggingItem allocation failed");
-                    continue;
+                let item: ObjcId = msg_send![class!(NSPasteboardItem), new];
+                let data = NSData::with_bytes(&encode_custom_drag_payload(type_name, data));
+                let custom_type = custom_drag_pboard_type();
+                let stored: Bool = msg_send![item, setData: &*data, forType: &*custom_type];
+                if !stored.as_bool() {
+                    return false;
                 }
+                let dragging_item: ObjcId = msg_send![class!(NSDraggingItem), alloc];
+                let dragging_item: ObjcId =
+                    msg_send![dragging_item, initWithPasteboardWriter: item];
+                if dragging_item.is_null() {
+                    return false;
+                }
+                let _: () = msg_send![dragging_item, setDraggingFrame: frame];
+                let _: () = msg_send![dragging_items, addObject: dragging_item];
+                let _: () = msg_send![dragging_item, release];
+            }
 
-                // Resolve drag images lazily via `imageComponentsProvider` (Apple's
-                // recommendation for large item counts), and by file *type* rather than
-                // `iconForFile:`, which can synchronously hit LaunchServices, network
-                // mounts, or iCloud for every selected path and beachball drag startup.
-                // `iconForFileType:` is deprecated in favor of `iconForContentType:`,
-                // but the replacement requires macOS 11 and we target 10.15.
-                let file_type = if *is_directory {
-                    "public.folder".to_string()
-                } else {
-                    path.extension()
-                        .and_then(|extension| extension.to_str())
-                        .map(|extension| extension.to_string())
-                        .unwrap_or_else(|| "public.data".to_string())
-                };
-                let provider = RcBlock::new(move || -> ObjcId {
-                    let component: ObjcId = msg_send![
-                        class!(NSDraggingImageComponent),
-                        draggingImageComponentWithKey: NSDraggingImageComponentIconKey
+            if let ExternalDragPayload::Files(paths) = payload {
+                for (path, is_directory) in paths.entries() {
+                    // Preserve non-UTF-8 paths
+                    let Ok(path_bytes) = CString::new(path.as_os_str().as_bytes()) else {
+                        log::warn!(
+                            "start_external_drag skipped path containing an interior nul byte"
+                        );
+                        continue;
+                    };
+
+                    let url: ObjcId = msg_send![
+                        class!(NSURL),
+                        fileURLWithFileSystemRepresentation: path_bytes.as_ptr(),
+                        isDirectory: Bool::new(*is_directory),
+                        relativeToURL: NIL
                     ];
-                    let workspace: ObjcId = msg_send![class!(NSWorkspace), sharedWorkspace];
-                    let file_type = ns_string(&file_type);
-                    let icon: ObjcId = msg_send![workspace, iconForFileType: &*file_type];
-                    let _: () = msg_send![component, setContents: icon];
-                    // Component frames are relative to the item's dragging frame.
-                    let _: () = msg_send![
-                        component,
-                        setFrame: Objc2NSRect::new(Objc2NSPoint::new(0., 0.), NSSize::new(32., 32.))
-                    ];
-                    msg_send![class!(NSArray), arrayWithObject: component]
-                });
-                let _: () = msg_send![item, setDraggingFrame: frame];
-                let _: () = msg_send![item, setImageComponentsProvider: &*provider];
-                let _: () = msg_send![dragging_items, addObject: item];
-                let _: () = msg_send![item, release];
+
+                    if url.is_null() {
+                        log::warn!("start_external_drag skipped path with NIL NSURL");
+                        continue;
+                    }
+
+                    let item: ObjcId = msg_send![class!(NSDraggingItem), alloc];
+                    let item: ObjcId = msg_send![item, initWithPasteboardWriter: url];
+                    if item.is_null() {
+                        log::warn!(
+                            "start_external_drag declined: NSDraggingItem allocation failed"
+                        );
+                        continue;
+                    }
+
+                    // Resolve drag images lazily via `imageComponentsProvider` (Apple's
+                    // recommendation for large item counts), and by file *type* rather than
+                    // `iconForFile:`, which can synchronously hit LaunchServices, network
+                    // mounts, or iCloud for every selected path and beachball drag startup.
+                    // `iconForFileType:` is deprecated in favor of `iconForContentType:`,
+                    // but the replacement requires macOS 11 and we target 10.15.
+                    let file_type = if *is_directory {
+                        "public.folder".to_string()
+                    } else {
+                        path.extension()
+                            .and_then(|extension| extension.to_str())
+                            .map(|extension| extension.to_string())
+                            .unwrap_or_else(|| "public.data".to_string())
+                    };
+                    let provider = RcBlock::new(move || -> ObjcId {
+                        let component: ObjcId = msg_send![
+                            class!(NSDraggingImageComponent),
+                            draggingImageComponentWithKey: NSDraggingImageComponentIconKey
+                        ];
+                        let workspace: ObjcId = msg_send![class!(NSWorkspace), sharedWorkspace];
+                        let file_type = ns_string(&file_type);
+                        let icon: ObjcId = msg_send![workspace, iconForFileType: &*file_type];
+                        let _: () = msg_send![component, setContents: icon];
+                        // Component frames are relative to the item's dragging frame.
+                        let _: () = msg_send![
+                            component,
+                            setFrame: Objc2NSRect::new(Objc2NSPoint::new(0., 0.), NSSize::new(32., 32.))
+                        ];
+                        msg_send![class!(NSArray), arrayWithObject: component]
+                    });
+                    let _: () = msg_send![item, setDraggingFrame: frame];
+                    let _: () = msg_send![item, setImageComponentsProvider: &*provider];
+                    let _: () = msg_send![dragging_items, addObject: item];
+                    let _: () = msg_send![item, release];
+                }
             }
 
             let count: NSUInteger = msg_send![dragging_items, count];
@@ -3569,6 +3616,22 @@ unsafe extern "C" fn dragging_entered(
     let is_source_window = is_drag_from_this_window(this, dragging_info);
     let window_state = unsafe { get_window_state(this) };
     let position = drag_event_position(&window_state, dragging_info);
+    if let Some((type_name, data)) = custom_payload_from_event(dragging_info) {
+        if send_custom_drag_event(
+            window_state.clone(),
+            CustomDragEvent::Entered {
+                position,
+                type_name,
+                data,
+            },
+        ) {
+            return if is_source_window {
+                NSDragOperationMove
+            } else {
+                NSDragOperationCopy
+            };
+        }
+    }
     let paths = external_paths_from_event(dragging_info);
     if let Some(event) = paths.map(|paths| FileDropEvent::Entered { position, paths })
         && send_file_drop_event(window_state, event)
@@ -3589,6 +3652,15 @@ unsafe extern "C" fn dragging_updated(
     let is_source_window = is_drag_from_this_window(this, dragging_info);
     let window_state = unsafe { get_window_state(this) };
     let position = drag_event_position(&window_state, dragging_info);
+    if custom_payload_from_event(dragging_info).is_some() {
+        if send_custom_drag_event(window_state.clone(), CustomDragEvent::Pending { position }) {
+            return if is_source_window {
+                NSDragOperationMove
+            } else {
+                NSDragOperationCopy
+            };
+        }
+    }
     if send_file_drop_event(window_state, FileDropEvent::Pending { position }) {
         if is_source_window {
             NSDragOperationMove
@@ -3602,6 +3674,7 @@ unsafe extern "C" fn dragging_updated(
 
 unsafe extern "C" fn dragging_exited(this: &Objc2Object, _: Sel, _: ObjcId) {
     let window_state = unsafe { get_window_state(this) };
+    send_custom_drag_event(window_state.clone(), CustomDragEvent::Exited);
     send_file_drop_event(window_state, FileDropEvent::Exited);
 }
 
@@ -3612,6 +3685,16 @@ unsafe extern "C" fn perform_drag_operation(
 ) -> Bool {
     let window_state = unsafe { get_window_state(this) };
     let position = drag_event_position(&window_state, dragging_info);
+    if let Some((type_name, data)) = custom_payload_from_event(dragging_info) {
+        return Bool::new(send_custom_drag_event(
+            window_state,
+            CustomDragEvent::Submit {
+                position,
+                type_name,
+                data,
+            },
+        ));
+    }
     Bool::new(send_file_drop_event(
         window_state,
         FileDropEvent::Submit { position },
@@ -3638,8 +3721,25 @@ fn external_paths_from_event(dragging_info: *mut Objc2Object) -> Option<External
     Some(ExternalPaths(paths))
 }
 
+fn custom_payload_from_event(dragging_info: ObjcId) -> Option<(String, Vec<u8>)> {
+    let pasteboard: ObjcId = unsafe { msg_send![dragging_info, draggingPasteboard] };
+    let custom_type = custom_drag_pboard_type();
+    let data: ObjcId = unsafe { msg_send![pasteboard, dataForType: &*custom_type] };
+    if data.is_null() {
+        return None;
+    }
+    let length: NSUInteger = unsafe { msg_send![data, length] };
+    let bytes: *const u8 = unsafe { msg_send![data, bytes] };
+    if bytes.is_null() {
+        return None;
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(bytes, length) };
+    decode_custom_drag_payload(bytes)
+}
+
 unsafe extern "C" fn conclude_drag_operation(this: &Objc2Object, _: Sel, _: ObjcId) {
     let window_state = unsafe { get_window_state(this) };
+    send_custom_drag_event(window_state.clone(), CustomDragEvent::Exited);
     send_file_drop_event(window_state, FileDropEvent::Exited);
 }
 
@@ -3679,6 +3779,21 @@ unsafe extern "C" fn dragging_session_ended(
         lock.last_left_mouse_down_event = None;
     }
     send_file_drop_event(window_state, FileDropEvent::Ended);
+}
+
+fn send_custom_drag_event(
+    window_state: Arc<Mutex<MacWindowState>>,
+    event: CustomDragEvent,
+) -> bool {
+    let mut lock = window_state.lock();
+    if let Some(mut callback) = lock.event_callback.take() {
+        drop(lock);
+        callback(PlatformInput::CustomDrag(event));
+        window_state.lock().event_callback = Some(callback);
+        true
+    } else {
+        false
+    }
 }
 
 async fn synthetic_drag(

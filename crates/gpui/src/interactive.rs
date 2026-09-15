@@ -783,6 +783,34 @@ impl InputEvent for FileDropEvent {
 }
 impl MouseEvent for FileDropEvent {}
 
+/// A custom application drag payload from the native platform.
+#[derive(Debug, Clone)]
+pub enum CustomDragEvent {
+    Entered {
+        position: Point<Pixels>,
+        type_name: String,
+        data: Vec<u8>,
+    },
+    Pending {
+        position: Point<Pixels>,
+    },
+    Submit {
+        position: Point<Pixels>,
+        type_name: String,
+        data: Vec<u8>,
+    },
+    Exited,
+    Ended,
+}
+
+impl Sealed for CustomDragEvent {}
+impl InputEvent for CustomDragEvent {
+    fn to_platform_input(self) -> PlatformInput {
+        PlatformInput::CustomDrag(self)
+    }
+}
+impl MouseEvent for CustomDragEvent {}
+
 /// An enum corresponding to all kinds of platform input events.
 #[derive(Clone, Debug)]
 pub enum PlatformInput {
@@ -812,6 +840,8 @@ pub enum PlatformInput {
     TouchDrag(TouchDragEvent),
     /// Files were dragged and dropped onto the window.
     FileDrop(FileDropEvent),
+    /// An application-defined native drag payload.
+    CustomDrag(CustomDragEvent),
     /// A raw touch event on a touch screen.
     Touch(TouchEvent),
 }
@@ -832,6 +862,7 @@ impl PlatformInput {
             PlatformInput::LongPress(event) => Some(event),
             PlatformInput::TouchDrag(event) => Some(event),
             PlatformInput::FileDrop(event) => Some(event),
+            PlatformInput::CustomDrag(event) => Some(event),
             PlatformInput::Touch(_) => None,
         }
     }
@@ -851,6 +882,7 @@ impl PlatformInput {
             PlatformInput::LongPress(_) => None,
             PlatformInput::TouchDrag(_) => None,
             PlatformInput::FileDrop(_) => None,
+            PlatformInput::CustomDrag(_) => None,
             PlatformInput::Touch(_) => None,
         }
     }
@@ -872,6 +904,7 @@ impl PlatformInput {
             PlatformInput::LongPress(_) => "long_press",
             PlatformInput::TouchDrag(_) => "touch_drag",
             PlatformInput::FileDrop(_) => "file_drop",
+            PlatformInput::CustomDrag(_) => "custom_drag",
             PlatformInput::Touch(_) => "touch",
         }
     }
