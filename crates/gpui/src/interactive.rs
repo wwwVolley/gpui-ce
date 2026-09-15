@@ -706,6 +706,23 @@ impl ExternalPaths {
 pub enum ExternalDragPayload {
     /// Real on-disk paths, handed to the platform as an outbound file drag.
     Files(FileDragPaths),
+    /// Application-defined data carried through the native drag pasteboard.
+    Custom {
+        /// Uniform type identifier or application-defined pasteboard type.
+        type_name: String,
+        /// Opaque payload bytes.
+        data: Vec<u8>,
+    },
+}
+
+impl ExternalDragPayload {
+    /// Creates a custom native drag payload.
+    pub fn custom(type_name: impl Into<String>, data: impl Into<Vec<u8>>) -> Self {
+        Self::Custom {
+            type_name: type_name.into(),
+            data: data.into(),
+        }
+    }
 }
 
 /// Paths handed to the platform for a native file drag. Directory metadata is
