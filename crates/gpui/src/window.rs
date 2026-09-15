@@ -5359,6 +5359,10 @@ impl Window {
         // Handlers may set this to true by calling `prevent_default`.
         self.default_prevented = false;
 
+        if let PlatformInput::CustomDrag(custom_drag) = &event {
+            cx.dispatch_custom_drag(self.handle.window_id(), custom_drag.clone());
+        }
+
         let event = match event {
             // Track the mouse position with our own state, since accessing the platform
             // API for the mouse position can only occur on the main thread.

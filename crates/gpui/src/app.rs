@@ -48,9 +48,9 @@ use crate::MacActivationPolicy;
 use crate::{
     Action, ActionBuildError, ActionRegistry, Any, AnyView, AnyWindowHandle, AppContext, Arena,
     ArenaBox, Asset, AssetSource, BackgroundExecutor, Bounds, ClipboardItem, ClipboardReadError,
-    CursorStyle, DispatchPhase, DisplayId, EventEmitter, ExternalDragPayload, FocusHandle,
-    FocusMap, ForegroundExecutor, Global, HapticFeedbackStyle, KeyBinding, KeyContext, Keymap,
-    Keystroke, LayoutId, Menu, MenuItem, OwnedMenu, PathPromptOptions, Pixels, Platform,
+    CursorStyle, CustomDragEvent, DispatchPhase, DisplayId, EventEmitter, ExternalDragPayload,
+    FocusHandle, FocusMap, ForegroundExecutor, Global, HapticFeedbackStyle, KeyBinding, KeyContext,
+    Keymap, Keystroke, LayoutId, Menu, MenuItem, OwnedMenu, PathPromptOptions, Pixels, Platform,
     PlatformDisplay, PlatformKeyboardLayout, PlatformKeyboardMapper, Point, Priority,
     PromptBuilder, PromptButton, PromptHandle, PromptLevel, Render, RenderImage,
     RenderablePromptHandle, Reservation, ScreenCaptureSource, SharedString, SubscriberSet,
@@ -341,6 +341,7 @@ pub(crate) type KeystrokeObserver =
     Box<dyn FnMut(&KeystrokeEvent, &mut Window, &mut App) -> bool + 'static>;
 type QuitHandler = Box<dyn FnOnce(&mut App) -> LocalBoxFuture<'static, ()> + 'static>;
 type WindowClosedHandler = Box<dyn FnMut(&mut App, WindowId)>;
+type CustomDragHandler = Box<dyn FnMut(&mut App, WindowId, CustomDragEvent)>;
 type ReleaseListener = Box<dyn FnOnce(&mut dyn Any, &mut App) + 'static>;
 type NewEntityListener = Box<dyn FnMut(AnyEntity, &mut Option<&mut Window>, &mut App) + 'static>;
 
@@ -740,6 +741,7 @@ pub struct App {
     pub(crate) quit_observers: SubscriberSet<(), QuitHandler>,
     pub(crate) restart_observers: SubscriberSet<(), Handler>,
     pub(crate) window_closed_observers: SubscriberSet<(), WindowClosedHandler>,
+    pub(crate) custom_drag_observers: SubscriberSet<(), CustomDragHandler>,
 
     /// Per-App element arena. This isolates element allocations between different
     /// App instances (important for tests where multiple Apps run concurrently).
@@ -880,6 +882,7 @@ impl App {
                 restart_path: None,
                 restart_arguments: Vec::new(),
                 window_closed_observers: SubscriberSet::new(),
+                custom_drag_observers: SubscriberSet::new(),
                 layout_id_buffer: Default::default(),
                 propagate_event: true,
                 prompt_builder: Some(PromptBuilder::Default),
@@ -2448,6 +2451,28 @@ impl App {
         let (subscription, activate) = self.window_closed_observers.insert((), Box::new(on_closed));
         activate();
         subscription
+    }
+
+    /// Registers a callback for native custom drag lifecycle events.
+    pub fn on_custom_drag(
+        &self,
+        mut handler: impl FnMut(&mut App, WindowId, CustomDragEvent) + 'static,
+    ) -> Subscription {
+        let (subscription, activate) = self.custom_drag_observers.insert(
+            (),
+            Box::new(move |cx, window_id, event| {
+                handler(cx, window_id, event);
+            }),
+        );
+        activate();
+        subscription
+    }
+
+    pub(crate) fn dispatch_custom_drag(&mut self, window_id: WindowId, event: CustomDragEvent) {
+        self.custom_drag_observers.clone().retain(&(), |callback| {
+            callback(self, window_id, event.clone());
+            true
+        });
     }
 
     pub(crate) fn clear_pending_keystrokes(&mut self) {
