@@ -3779,6 +3779,12 @@ unsafe extern "C" fn dragging_session_ended(
         lock.last_left_mouse_down_event = None;
     }
     send_file_drop_event(window_state, FileDropEvent::Ended);
+    send_custom_drag_event(
+        window_state,
+        CustomDragEvent::Ended {
+            operation: operation as u64,
+        },
+    );
 }
 
 fn send_custom_drag_event(

@@ -5494,8 +5494,8 @@ impl Window {
                 crate::CustomDragEvent::Exited => {
                     PlatformInput::CustomDrag(crate::CustomDragEvent::Exited)
                 }
-                crate::CustomDragEvent::Ended => {
-                    PlatformInput::CustomDrag(crate::CustomDragEvent::Ended)
+                crate::CustomDragEvent::Ended { operation } => {
+                    PlatformInput::CustomDrag(crate::CustomDragEvent::Ended { operation })
                 }
             },
             PlatformInput::KeyDown(_) | PlatformInput::KeyUp(_) => event,

@@ -800,7 +800,7 @@ pub enum CustomDragEvent {
         data: Vec<u8>,
     },
     Exited,
-    Ended,
+    Ended { operation: u64 },
 }
 
 impl Sealed for CustomDragEvent {}
