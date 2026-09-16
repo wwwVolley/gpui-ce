@@ -92,6 +92,43 @@ fn custom_drag_pboard_type() -> Retained<NSString> {
     ns_string("org.gpui.custom-drag")
 }
 
+/// Called only on the AppKit thread during native drag initiation.
+unsafe fn make_drag_preview_image(preview: &gpui::ExternalDragPreview) -> Retained<Objc2Object> {
+    let size = NSSize::new(
+        preview.width.clamp(64, 1024) as f64,
+        preview.height.clamp(24, 256) as f64,
+    );
+    let image: ObjcId = msg_send![class!(NSImage), alloc];
+    let image: ObjcId = msg_send![image, initWithSize: size];
+    // initWithSize returns an owned (+1) image; transfer that ownership to Rust.
+    let image = unsafe { Retained::from_raw(image) }.expect("NSImage allocation failed");
+    let _: () = msg_send![&*image, lockFocus];
+    let background: ObjcId = msg_send![class!(NSColor), colorWithSRGBRed: 0.125f64, green: 0.129f64, blue: 0.141f64, alpha: 0.96f64];
+    let _: () = msg_send![background, setFill];
+    let bounds = Objc2NSRect::new(Objc2NSPoint::new(0., 0.), size);
+    let path: ObjcId = msg_send![class!(NSBezierPath), bezierPathWithRoundedRect: bounds, xRadius: 6.0f64, yRadius: 6.0f64];
+    let _: () = msg_send![path, fill];
+    let attributes: ObjcId = msg_send![class!(NSMutableDictionary), dictionary];
+    let font: ObjcId = msg_send![class!(NSFont), systemFontOfSize: 13.0f64];
+    let foreground: ObjcId = msg_send![class!(NSColor), colorWithSRGBRed: 0.91f64, green: 0.92f64, blue: 0.93f64, alpha: 1.0f64];
+    let _: () = msg_send![attributes, setObject: font, forKey: &*ns_string("NSFont")];
+    let _: () = msg_send![attributes, setObject: foreground, forKey: &*ns_string("NSColor")];
+    let paragraph: ObjcId = msg_send![class!(NSMutableParagraphStyle), new];
+    // NSLineBreakByTruncatingTail, keeping long filenames inside the card.
+    let _: () = msg_send![paragraph, setLineBreakMode: 4usize];
+    let _: () =
+        msg_send![attributes, setObject: paragraph, forKey: &*ns_string("NSParagraphStyle")];
+    let _: () = msg_send![paragraph, release];
+    let text_rect = Objc2NSRect::new(
+        Objc2NSPoint::new(12., (size.height - 18.) / 2.),
+        NSSize::new(size.width - 24., 18.),
+    );
+    let _: () =
+        msg_send![&*ns_string(&preview.text), drawInRect: text_rect, withAttributes: attributes];
+    let _: () = msg_send![&*image, unlockFocus];
+    image
+}
+
 fn encode_custom_drag_payload(type_name: &str, data: &[u8]) -> Vec<u8> {
     let name = type_name.as_bytes();
     let mut encoded = Vec::with_capacity(4 + name.len() + data.len());
@@ -2315,7 +2352,12 @@ impl PlatformWindow for MacWindow {
                 NSSize::new(180., 36.),
             );
 
-            if let ExternalDragPayload::Custom { type_name, data } = payload {
+            if let ExternalDragPayload::Custom {
+                type_name,
+                data,
+                preview,
+            } = payload
+            {
                 if type_name.is_empty() || data.is_empty() {
                     log::warn!("start_external_drag declined: empty custom payload");
                     return false;
@@ -2333,19 +2375,31 @@ impl PlatformWindow for MacWindow {
                 if dragging_item.is_null() {
                     return false;
                 }
-                let _: () = msg_send![dragging_item, setDraggingFrame: frame];
-                let provider = RcBlock::new(move || -> ObjcId {
-                    let component: ObjcId = msg_send![
-                        class!(NSDraggingImageComponent),
-                        draggingImageComponentWithKey: NSDraggingImageComponentIconKey
-                    ];
-                    let workspace: ObjcId = msg_send![class!(NSWorkspace), sharedWorkspace];
-                    let file_type = ns_string("public.text");
-                    let icon: ObjcId = msg_send![workspace, iconForFileType: &*file_type];
-                    let _: () = msg_send![component, setContents: icon];
-                    component
-                });
-                let _: () = msg_send![dragging_item, setImageComponentsProvider: &*provider];
+                if let Some(preview) = preview {
+                    // NSDraggingItem retains the image. AppKit renders at the display scale.
+                    let image = make_drag_preview_image(preview);
+                    let image_size: NSSize = msg_send![&*image, size];
+                    let preview_frame = Objc2NSRect::new(
+                        Objc2NSPoint::new(location.x - 28., location.y - image_size.height / 2.),
+                        image_size,
+                    );
+                    let _: () = msg_send![dragging_item, setDraggingFrame: preview_frame, contents: &*image];
+                } else {
+                    let _: () = msg_send![dragging_item, setDraggingFrame: frame];
+                    let provider = RcBlock::new(move || -> ObjcId {
+                        let component: ObjcId = msg_send![
+                            class!(NSDraggingImageComponent),
+                            draggingImageComponentWithKey: NSDraggingImageComponentIconKey
+                        ];
+                        let workspace: ObjcId = msg_send![class!(NSWorkspace), sharedWorkspace];
+                        let file_type = ns_string("public.text");
+                        let icon: ObjcId = msg_send![workspace, iconForFileType: &*file_type];
+                        let _: () = msg_send![component, setContents: icon];
+                        let _: () = msg_send![component, setFrame: Objc2NSRect::new(Objc2NSPoint::new(0., 0.), NSSize::new(36., 36.))];
+                        msg_send![class!(NSArray), arrayWithObject: component]
+                    });
+                    let _: () = msg_send![dragging_item, setImageComponentsProvider: &*provider];
+                }
                 let _: () = msg_send![dragging_items, addObject: dragging_item];
                 let _: () = msg_send![dragging_item, release];
             }
@@ -3809,7 +3863,10 @@ unsafe extern "C" fn dragging_session_ended(
                 let screen_frame: Objc2NSRect = if screen == NIL {
                     Objc2NSRect {
                         origin: Objc2NSPoint { x: 0.0, y: 0.0 },
-                        size: NSSize { width: 0.0, height: 0.0 },
+                        size: NSSize {
+                            width: 0.0,
+                            height: 0.0,
+                        },
                     }
                 } else {
                     unsafe { msg_send![screen, frame] }

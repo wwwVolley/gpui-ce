@@ -712,7 +712,20 @@ pub enum ExternalDragPayload {
         type_name: String,
         /// Opaque payload bytes.
         data: Vec<u8>,
+        /// Optional native drag image description.
+        preview: Option<ExternalDragPreview>,
     },
+}
+
+/// A text card rendered by the platform for an outbound drag.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ExternalDragPreview {
+    /// Display text, independent of the pasteboard payload.
+    pub text: String,
+    /// Width in logical points (the platform may constrain this).
+    pub width: u32,
+    /// Height in logical points (the platform may constrain this).
+    pub height: u32,
 }
 
 impl ExternalDragPayload {
@@ -721,6 +734,20 @@ impl ExternalDragPayload {
         Self::Custom {
             type_name: type_name.into(),
             data: data.into(),
+            preview: None,
+        }
+    }
+
+    /// Creates a custom native drag payload with a text card preview.
+    pub fn custom_with_preview(
+        type_name: impl Into<String>,
+        data: impl Into<Vec<u8>>,
+        preview: ExternalDragPreview,
+    ) -> Self {
+        Self::Custom {
+            type_name: type_name.into(),
+            data: data.into(),
+            preview: Some(preview),
         }
     }
 }
