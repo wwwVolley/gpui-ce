@@ -2311,8 +2311,8 @@ impl PlatformWindow for MacWindow {
             // offset from the cursor, so it has to stay anchored on `event`.
             let location: Objc2NSPoint = msg_send![event, locationInWindow];
             let frame = Objc2NSRect::new(
-                Objc2NSPoint::new(location.x - 16., location.y - 16.),
-                NSSize::new(32., 32.),
+                Objc2NSPoint::new(location.x - 28., location.y - 18.),
+                NSSize::new(180., 36.),
             );
 
             if let ExternalDragPayload::Custom { type_name, data } = payload {
@@ -2334,6 +2334,18 @@ impl PlatformWindow for MacWindow {
                     return false;
                 }
                 let _: () = msg_send![dragging_item, setDraggingFrame: frame];
+                let provider = RcBlock::new(move || -> ObjcId {
+                    let component: ObjcId = msg_send![
+                        class!(NSDraggingImageComponent),
+                        draggingImageComponentWithKey: NSDraggingImageComponentIconKey
+                    ];
+                    let workspace: ObjcId = msg_send![class!(NSWorkspace), sharedWorkspace];
+                    let file_type = ns_string("public.text");
+                    let icon: ObjcId = msg_send![workspace, iconForFileType: &*file_type];
+                    let _: () = msg_send![component, setContents: icon];
+                    component
+                });
+                let _: () = msg_send![dragging_item, setImageComponentsProvider: &*provider];
                 let _: () = msg_send![dragging_items, addObject: dragging_item];
                 let _: () = msg_send![dragging_item, release];
             }
