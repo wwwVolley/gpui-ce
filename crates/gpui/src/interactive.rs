@@ -802,6 +802,7 @@ pub enum CustomDragEvent {
     Exited,
     Ended {
         operation: u64,
+        outside_window: bool,
     },
 }
 

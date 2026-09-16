@@ -3783,6 +3783,15 @@ unsafe extern "C" fn dragging_session_ended(
         window_state,
         CustomDragEvent::Ended {
             operation: operation as u64,
+            outside_window: {
+                let frame = get_frame(this);
+                let local_x = point.x - frame.origin.x;
+                let local_y = frame.size.height - (point.y - frame.origin.y);
+                local_x < 0.0
+                    || local_y < 0.0
+                    || local_x > frame.size.width
+                    || local_y > frame.size.height
+            },
         },
     );
 }
