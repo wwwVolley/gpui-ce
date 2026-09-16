@@ -803,6 +803,7 @@ pub enum CustomDragEvent {
     Ended {
         operation: u64,
         outside_window: bool,
+        position: Point<Pixels>,
     },
 }
 

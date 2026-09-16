@@ -3766,7 +3766,7 @@ unsafe extern "C" fn dragging_session_ended(
     this: &Objc2Object,
     _: Sel,
     _: ObjcId,
-    _: Objc2NSPoint,
+    release_point: Objc2NSPoint,
     operation: NSDragOperation,
 ) {
     log::debug!("dragging_session_ended operation={operation}");
@@ -3785,12 +3785,27 @@ unsafe extern "C" fn dragging_session_ended(
             operation: operation as u64,
             outside_window: {
                 let frame = get_frame(this);
-                let local_x = point.x - frame.origin.x;
-                let local_y = frame.size.height - (point.y - frame.origin.y);
+                let local_x = release_point.x - frame.origin.x;
+                let local_y = frame.size.height - (release_point.y - frame.origin.y);
                 local_x < 0.0
                     || local_y < 0.0
                     || local_x > frame.size.width
                     || local_y > frame.size.height
+            },
+            position: {
+                let screen: ObjcId = unsafe { msg_send![this, screen] };
+                let screen_frame: Objc2NSRect = if screen == NIL {
+                    Objc2NSRect {
+                        origin: Objc2NSPoint { x: 0.0, y: 0.0 },
+                        size: NSSize { width: 0.0, height: 0.0 },
+                    }
+                } else {
+                    unsafe { msg_send![screen, frame] }
+                };
+                point(
+                    px((release_point.x - screen_frame.origin.x) as f32),
+                    px((screen_frame.origin.y + screen_frame.size.height - release_point.y) as f32),
+                )
             },
         },
     );

@@ -5497,10 +5497,12 @@ impl Window {
                 crate::CustomDragEvent::Ended {
                     operation,
                     outside_window,
+                    position,
                 } => {
                     PlatformInput::CustomDrag(crate::CustomDragEvent::Ended {
                         operation,
                         outside_window,
+                        position,
                     })
                 }
             },
