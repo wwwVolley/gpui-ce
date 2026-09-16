@@ -26,6 +26,8 @@ use crate::{
     WindowParams, WindowTextSystem, point, prelude::*, px, rems, size, transparent_black,
 };
 
+mod drag_bounds;
+
 use crate::gestures::{GestureTuning, RecognizedTouchGesture, TouchGestureRecognizer};
 use crate::interactive::TouchEvent;
 use anyhow::{Context as _, Result, anyhow};
@@ -3187,11 +3189,15 @@ impl Window {
             element.prepaint_as_root(Point::default(), root_size.into(), self, cx);
             prompt_element = Some(element);
             self.prompt = Some(prompt);
-        } else if let Some(active_drag) = cx.active_drag.take() {
-            let mut element = active_drag.view.clone().into_any_element();
-            let offset = self.mouse_position() - active_drag.cursor_offset;
-            element.prepaint_as_root(offset, AvailableSpace::min_size(), self, cx);
-            active_drag_element = Some(element);
+        } else if let Some(mut active_drag) = cx.active_drag.take() {
+            if !active_drag.platform_preview {
+                let mut element = active_drag.view.clone().into_any_element();
+                let offset = self.mouse_position() - active_drag.cursor_offset;
+                active_drag.preview_size =
+                    Some(element.layout_as_root(AvailableSpace::min_size(), self, cx));
+                element.prepaint_at(offset, self, cx);
+                active_drag_element = Some(element);
+            }
             cx.active_drag = Some(active_drag);
         } else {
             tooltip_element = self.prepaint_tooltip(cx);
@@ -5414,6 +5420,8 @@ impl Window {
                             value: Arc::new(paths.clone()),
                             view: cx.new(|_| paths).into(),
                             cursor_offset: position,
+                            preview_size: None,
+                            platform_preview: false,
                             cursor_style: None,
                             external_payload_source: None,
                         });
@@ -5474,6 +5482,7 @@ impl Window {
             PlatformInput::CustomDrag(custom_drag) => match custom_drag {
                 crate::CustomDragEvent::Entered { position, .. }
                 | crate::CustomDragEvent::Pending { position } => {
+                    cx.restore_platform_drag(self.handle.window_id());
                     self.mouse_position = position;
                     PlatformInput::MouseMove(MouseMoveEvent {
                         position,
@@ -5482,6 +5491,7 @@ impl Window {
                     })
                 }
                 crate::CustomDragEvent::Submit { position, .. } => {
+                    cx.restore_platform_drag(self.handle.window_id());
                     cx.activate(true);
                     self.mouse_position = position;
                     PlatformInput::MouseUp(MouseUpEvent {
@@ -5492,19 +5502,19 @@ impl Window {
                     })
                 }
                 crate::CustomDragEvent::Exited => {
+                    cx.hand_restored_drag_to_platform(self.handle.window_id());
+                    self.refresh();
                     PlatformInput::CustomDrag(crate::CustomDragEvent::Exited)
                 }
                 crate::CustomDragEvent::Ended {
                     operation,
                     outside_window,
                     position,
-                } => {
-                    PlatformInput::CustomDrag(crate::CustomDragEvent::Ended {
-                        operation,
-                        outside_window,
-                        position,
-                    })
-                }
+                } => PlatformInput::CustomDrag(crate::CustomDragEvent::Ended {
+                    operation,
+                    outside_window,
+                    position,
+                }),
             },
             PlatformInput::KeyDown(_) | PlatformInput::KeyUp(_) => event,
         };
@@ -5552,7 +5562,19 @@ impl Window {
         if mouse_move.pressed_button != Some(MouseButton::Left) {
             return;
         }
-        if Bounds::new(Point::default(), self.viewport_size).contains(&mouse_move.position) {
+        let Some(drag) = cx.active_drag.as_ref() else {
+            return;
+        };
+        if !drag_bounds::preview_leaves_viewport(
+            [mouse_move.position.x.into(), mouse_move.position.y.into()],
+            [drag.cursor_offset.x.into(), drag.cursor_offset.y.into()],
+            drag.preview_size
+                .map(|size| [size.width.into(), size.height.into()]),
+            [
+                self.viewport_size.width.into(),
+                self.viewport_size.height.into(),
+            ],
+        ) {
             return;
         }
         if !self.platform_window.can_start_external_drag() {
@@ -5568,10 +5590,14 @@ impl Window {
         let Some(payload) = payload_source(self, cx) else {
             return;
         };
-        if self.platform_window.start_external_drag(&payload)
-            && cx.hand_active_drag_to_platform(self.handle.window_id())
-        {
-            self.refresh();
+        if self.platform_window.start_external_drag(&payload) {
+            if let Some(drag) = cx.active_drag.as_mut() {
+                drag.platform_preview =
+                    matches!(payload, crate::ExternalDragPayload::Custom { .. });
+            }
+            if cx.hand_active_drag_to_platform(self.handle.window_id()) {
+                self.refresh();
+            }
         }
     }
 

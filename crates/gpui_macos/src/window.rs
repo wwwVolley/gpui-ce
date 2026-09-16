@@ -2383,7 +2383,8 @@ impl PlatformWindow for MacWindow {
                     return false;
                 }
                 if let Some(preview) = preview {
-                    // NSDraggingItem retains the image. AppKit renders at the display scale.
+                    // The copied provider retains the image for the drag session.
+                    // AppKit renders at the display scale.
                     let image = make_drag_preview_image(preview);
                     let image_size: NSSize = msg_send![&*image, size];
                     let (offset_x, offset_y) = preview
@@ -2397,7 +2398,23 @@ impl PlatformWindow for MacWindow {
                         ),
                         image_size,
                     );
-                    let _: () = msg_send![dragging_item, setDraggingFrame: preview_frame, contents: &*image];
+                    let _: () = msg_send![dragging_item, setDraggingFrame: preview_frame];
+                    // The convenience contents setter labels the whole image as an
+                    // "icon". A custom preview is not a file icon: supply its own
+                    // component key rather than opting into standard icon semantics.
+                    let provider = RcBlock::new(move || -> ObjcId {
+                        let key = ns_string("org.gpui.custom-preview");
+                        let component: ObjcId = msg_send![
+                            class!(NSDraggingImageComponent),
+                            draggingImageComponentWithKey: &*key
+                        ];
+                        let _: () = msg_send![component, setContents: &*image];
+                        let component_frame =
+                            Objc2NSRect::new(Objc2NSPoint::new(0., 0.), image_size);
+                        let _: () = msg_send![component, setFrame: component_frame];
+                        msg_send![class!(NSArray), arrayWithObject: component]
+                    });
+                    let _: () = msg_send![dragging_item, setImageComponentsProvider: &*provider];
                 } else {
                     let _: () = msg_send![dragging_item, setDraggingFrame: frame];
                     let provider = RcBlock::new(move || -> ObjcId {
@@ -2501,6 +2518,9 @@ impl PlatformWindow for MacWindow {
 
             let started = !session.is_null();
             if started {
+                if matches!(payload, ExternalDragPayload::Custom { .. }) {
+                    preserve_custom_drag_formation(session);
+                }
                 self.0.lock().synthetic_drag_counter += 1;
             }
             log::debug!(
@@ -3688,6 +3708,15 @@ fn is_drag_from_this_window(this: &Objc2Object, dragging_info: ObjcId) -> bool {
     std::ptr::eq(source as *const Objc2Object, this as *const Objc2Object)
 }
 
+/// Preserve the supplied arrangement of custom previews. File drags keep AppKit defaults.
+unsafe fn preserve_custom_drag_formation(dragging: ObjcId) {
+    // NSDraggingFormationNone = 1 (Default = 0).
+    let before: NSInteger = unsafe { msg_send![dragging, draggingFormation] };
+    if before != 1 {
+        let _: () = unsafe { msg_send![dragging, setDraggingFormation: 1isize] };
+    }
+}
+
 unsafe extern "C" fn dragging_entered(
     this: &Objc2Object,
     _: Sel,
@@ -3705,6 +3734,7 @@ unsafe extern "C" fn dragging_entered(
                 data,
             },
         ) {
+            unsafe { preserve_custom_drag_formation(dragging_info) };
             return if is_source_window {
                 NSDragOperationMove
             } else {
@@ -3734,6 +3764,7 @@ unsafe extern "C" fn dragging_updated(
     let position = drag_event_position(&window_state, dragging_info);
     if custom_payload_from_event(dragging_info).is_some() {
         if send_custom_drag_event(window_state.clone(), CustomDragEvent::Pending { position }) {
+            unsafe { preserve_custom_drag_formation(dragging_info) };
             return if is_source_window {
                 NSDragOperationMove
             } else {

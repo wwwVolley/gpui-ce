@@ -3092,6 +3092,12 @@ pub struct AnyDrag {
     /// on the original element that the drag was initiated
     pub cursor_offset: Point<Pixels>,
 
+    /// Last laid-out preview size, used to hand off before its edges are clipped.
+    pub preview_size: Option<crate::Size<Pixels>>,
+
+    /// Route source-window drag events without painting a duplicate native preview.
+    pub platform_preview: bool,
+
     /// The cursor style to use while dragging
     pub cursor_style: Option<CursorStyle>,
 

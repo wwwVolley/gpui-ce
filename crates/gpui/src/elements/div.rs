@@ -3141,6 +3141,8 @@ impl Interactivity {
                                 value: listener.value,
                                 cursor_offset,
                                 cursor_style: drag_cursor_style,
+                                preview_size: None,
+                                platform_preview: false,
                                 external_payload_source,
                             });
                             pending_mouse_down.take();
