@@ -726,6 +726,9 @@ pub struct ExternalDragPreview {
     pub width: u32,
     /// Height in logical points (the platform may constrain this).
     pub height: u32,
+    /// Pointer offset from the preview's top-left corner, in logical points.
+    /// None retains the platform's default drag image anchor.
+    pub cursor_offset: Option<(i32, i32)>,
 }
 
 impl ExternalDragPayload {

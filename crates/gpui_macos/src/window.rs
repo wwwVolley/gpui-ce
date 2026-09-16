@@ -103,14 +103,21 @@ unsafe fn make_drag_preview_image(preview: &gpui::ExternalDragPreview) -> Retain
     // initWithSize returns an owned (+1) image; transfer that ownership to Rust.
     let image = unsafe { Retained::from_raw(image) }.expect("NSImage allocation failed");
     let _: () = msg_send![&*image, lockFocus];
-    let background: ObjcId = msg_send![class!(NSColor), colorWithSRGBRed: 0.125f64, green: 0.129f64, blue: 0.141f64, alpha: 0.96f64];
+    let background: ObjcId = msg_send![class!(NSColor), colorWithSRGBRed: 41.0f64 / 255., green: 43.0f64 / 255., blue: 48.0f64 / 255., alpha: 1.0f64];
     let _: () = msg_send![background, setFill];
-    let bounds = Objc2NSRect::new(Objc2NSPoint::new(0., 0.), size);
+    let bounds = Objc2NSRect::new(
+        Objc2NSPoint::new(0.5, 0.5),
+        NSSize::new(size.width - 1., size.height - 1.),
+    );
     let path: ObjcId = msg_send![class!(NSBezierPath), bezierPathWithRoundedRect: bounds, xRadius: 6.0f64, yRadius: 6.0f64];
     let _: () = msg_send![path, fill];
+    let border: ObjcId = msg_send![class!(NSColor), colorWithSRGBRed: 72.0f64 / 255., green: 75.0f64 / 255., blue: 82.0f64 / 255., alpha: 1.0f64];
+    let _: () = msg_send![border, setStroke];
+    let _: () = msg_send![path, setLineWidth: 1.0f64];
+    let _: () = msg_send![path, stroke];
     let attributes: ObjcId = msg_send![class!(NSMutableDictionary), dictionary];
     let font: ObjcId = msg_send![class!(NSFont), systemFontOfSize: 13.0f64];
-    let foreground: ObjcId = msg_send![class!(NSColor), colorWithSRGBRed: 0.91f64, green: 0.92f64, blue: 0.93f64, alpha: 1.0f64];
+    let foreground: ObjcId = msg_send![class!(NSColor), colorWithSRGBRed: 232.0f64 / 255., green: 234.0f64 / 255., blue: 237.0f64 / 255., alpha: 1.0f64];
     let _: () = msg_send![attributes, setObject: font, forKey: &*ns_string("NSFont")];
     let _: () = msg_send![attributes, setObject: foreground, forKey: &*ns_string("NSColor")];
     let paragraph: ObjcId = msg_send![class!(NSMutableParagraphStyle), new];
@@ -2379,8 +2386,15 @@ impl PlatformWindow for MacWindow {
                     // NSDraggingItem retains the image. AppKit renders at the display scale.
                     let image = make_drag_preview_image(preview);
                     let image_size: NSSize = msg_send![&*image, size];
+                    let (offset_x, offset_y) = preview
+                        .cursor_offset
+                        .map(|(x, y)| (x as f64, y as f64))
+                        .unwrap_or((28., image_size.height / 2.));
                     let preview_frame = Objc2NSRect::new(
-                        Objc2NSPoint::new(location.x - 28., location.y - image_size.height / 2.),
+                        Objc2NSPoint::new(
+                            location.x - offset_x,
+                            location.y + offset_y - image_size.height,
+                        ),
                         image_size,
                     );
                     let _: () = msg_send![dragging_item, setDraggingFrame: preview_frame, contents: &*image];
