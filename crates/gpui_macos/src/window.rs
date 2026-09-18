@@ -2522,7 +2522,7 @@ impl PlatformWindow for MacWindow {
                     // Custom sources handle an unaccepted drop in their end callback
                     // (for example by opening a window). Do not animate the image
                     // back to its origin before the application handles that outcome.
-                    let _: () = msg_send![session, setAnimatesToStartingPositionsOnCancel: NO];
+                    let _: () = msg_send![session, setAnimatesToStartingPositionsOnCancel: Bool::new(false)];
                     preserve_custom_drag_formation(session);
                 }
                 self.0.lock().synthetic_drag_counter += 1;
