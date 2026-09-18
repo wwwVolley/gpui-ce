@@ -2519,6 +2519,8 @@ impl PlatformWindow for MacWindow {
             let started = !session.is_null();
             if started {
                 if matches!(payload, ExternalDragPayload::Custom { .. }) {
+                    // The application handles unaccepted custom drops in its end callback.
+                    let _: () = msg_send![session, setAnimatesToStartingPositionsOnCancelOrFail: Bool::new(false)];
                     preserve_custom_drag_formation(session);
                 }
                 self.0.lock().synthetic_drag_counter += 1;
