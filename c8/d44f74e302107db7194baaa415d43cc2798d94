@@ -1,0 +1,19 @@
+crates/gpui/src/window.rs
+  s_31ffbce6ae9f06::t_58f2e9fda49945 5572-5573
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "c8d44f74e302107db7194baaa415d43cc2798d94",
+  "prompts": {},
+  "sessions": {
+    "s_31ffbce6ae9f06": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a09009-667e-7ea2-a642-8e04d2228ba2",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "wangningtao <wangningtao@rongcloud.cn>"
+    }
+  }
+}
