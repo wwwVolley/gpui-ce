@@ -39,6 +39,7 @@ use objc2_app_kit::{
     NSViewLayerContentsRedrawPolicy, NSVisualEffectMaterial, NSVisualEffectState,
     NSWindow as Objc2NSWindow, NSWindowButton as Objc2NSWindowButton, NSWindowCollectionBehavior,
     NSWindowOcclusionState, NSWindowOrderingMode, NSWindowStyleMask, NSWindowTitleVisibility,
+    NSPasteboard,
 };
 use objc2_foundation::{
     NSData, NSInteger, NSNotFound, NSOperatingSystemVersion, NSPoint as Objc2NSPoint, NSRange,
@@ -3837,17 +3838,9 @@ fn external_paths_from_event(dragging_info: *mut Objc2Object) -> Option<External
 fn custom_payload_from_event(dragging_info: ObjcId) -> Option<(String, Vec<u8>)> {
     let pasteboard: ObjcId = unsafe { msg_send![dragging_info, draggingPasteboard] };
     let custom_type = custom_drag_pboard_type();
-    let data: ObjcId = unsafe { msg_send![pasteboard, dataForType: &*custom_type] };
-    if data.is_null() {
-        return None;
-    }
-    let length: NSUInteger = unsafe { msg_send![data, length] };
-    let bytes: *const u8 = unsafe { msg_send![data, bytes] };
-    if bytes.is_null() {
-        return None;
-    }
-    let bytes = unsafe { std::slice::from_raw_parts(bytes, length) };
-    decode_custom_drag_payload(bytes)
+    let pasteboard = unsafe { &*(pasteboard as *const NSPasteboard) };
+    let data = pasteboard.dataForType(&custom_type)?;
+    decode_custom_drag_payload(&data.to_vec())
 }
 
 unsafe extern "C" fn conclude_drag_operation(this: &Objc2Object, _: Sel, _: ObjcId) {
