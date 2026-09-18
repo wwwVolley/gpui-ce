@@ -1,0 +1,34 @@
+crates/gpui_macos/src/window.rs
+  s_31ffbce6ae9f06::t_d650b5e3c499bf 2386-2387,2401-2411,2414-2417
+  s_31ffbce6ae9f06::t_d9ee991ddda05e 2521-2523,3711-3719,3737,3767
+  s_31ffbce6ae9f06::t_6af46a20da37a8 2412-2413
+crates/gpui/src/window/drag_bounds.rs
+  s_31ffbce6ae9f06::t_e41d9003649ddf 2
+  s_31ffbce6ae9f06::t_393a5b09b2f293 4-5,8-15
+  s_31ffbce6ae9f06::t_ccc78817e9d069 1,3,6-7,16-45
+  s_31ffbce6ae9f06::t_d68ce0be46b616 46-68
+crates/gpui/src/window.rs
+  s_31ffbce6ae9f06::t_393a5b09b2f293 29-30,3192-3200,5423-5424,5485,5494,5505-5506,5513-5517,5565-5569,5574,5577,5594-5595
+  s_31ffbce6ae9f06::t_be057bc8a75f3a 5570-5573,5575-5576,5593,5596-5600
+crates/gpui/src/app.rs
+  s_31ffbce6ae9f06::t_986ac367037c3c 3096
+  s_31ffbce6ae9f06::t_393a5b09b2f293 3095,3097-3100
+crates/gpui/src/elements/div.rs
+  s_31ffbce6ae9f06::t_393a5b09b2f293 3144-3145
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "80ce326b6fcddc6094e67830a6d3fd90dd5ccd4d",
+  "prompts": {},
+  "sessions": {
+    "s_31ffbce6ae9f06": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a09009-667e-7ea2-a642-8e04d2228ba2",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "wangningtao <wangningtao@rongcloud.cn>"
+    }
+  }
+}

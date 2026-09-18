@@ -1,0 +1,26 @@
+crates/gpui/src/interactive.rs
+  s_31ffbce6ae9f06::t_205fdd35228bca 806
+crates/gpui_macos/src/window.rs
+  s_31ffbce6ae9f06::t_c39f1435b37b9d 3788-3789
+  s_31ffbce6ae9f06::t_205fdd35228bca 3795-3799,3801-3805,3808
+  s_31ffbce6ae9f06::t_40ef92482386c0 3809
+  s_31ffbce6ae9f06::t_268d33793e6af6 3769,3800,3806-3807
+crates/gpui/src/window.rs
+  s_31ffbce6ae9f06::t_205fdd35228bca 5500,5505
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "518274684ef6232ad663be98010e7aa6f4c333f2",
+  "prompts": {},
+  "sessions": {
+    "s_31ffbce6ae9f06": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a09009-667e-7ea2-a642-8e04d2228ba2",
+        "model": "gpt-6-astra"
+      },
+      "human_author": null
+    }
+  }
+}
