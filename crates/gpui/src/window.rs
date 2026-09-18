@@ -5569,8 +5569,8 @@ impl Window {
         // native preview once the pointer itself leaves the window; using the
         // preview bounds here causes early handoff while dragging near a title
         // bar or edge.
-        if mouse_move.position.x >= 0.0
-            && mouse_move.position.y >= 0.0
+        if mouse_move.position.x >= px(0.0)
+            && mouse_move.position.y >= px(0.0)
             && mouse_move.position.x <= self.viewport_size.width
             && mouse_move.position.y <= self.viewport_size.height
         {
