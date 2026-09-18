@@ -5565,16 +5565,15 @@ impl Window {
         let Some(drag) = cx.active_drag.as_ref() else {
             return;
         };
-        if !drag_bounds::preview_leaves_viewport(
-            [mouse_move.position.x.into(), mouse_move.position.y.into()],
-            [drag.cursor_offset.x.into(), drag.cursor_offset.y.into()],
-            drag.preview_size
-                .map(|size| [size.width.into(), size.height.into()]),
-            [
-                self.viewport_size.width.into(),
-                self.viewport_size.height.into(),
-            ],
-        ) {
+        // Keep in-window drags owned by GPUI. Applications can still provide a
+        // native preview once the pointer itself leaves the window; using the
+        // preview bounds here causes early handoff while dragging near a title
+        // bar or edge.
+        if mouse_move.position.x >= 0.0
+            && mouse_move.position.y >= 0.0
+            && mouse_move.position.x <= self.viewport_size.width
+            && mouse_move.position.y <= self.viewport_size.height
+        {
             return;
         }
         if !self.platform_window.can_start_external_drag() {
