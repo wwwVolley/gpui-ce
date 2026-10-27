@@ -1,0 +1,19 @@
+crates/gpui_macos/src/window.rs
+  s_31ffbce6ae9f06::t_fdade844ee3d54 2314-2315,2337-2348
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "64eb61eb4075fd39cd8ec38e54384426be0efdc5",
+  "prompts": {},
+  "sessions": {
+    "s_31ffbce6ae9f06": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a09009-667e-7ea2-a642-8e04d2228ba2",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "wangningtao <wangningtao@rongcloud.cn>"
+    }
+  }
+}

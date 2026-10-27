@@ -1,0 +1,25 @@
+crates/gpui/src/interactive.rs
+  s_31ffbce6ae9f06::t_b493d4b41a0afa 715-716,720,723,725,727,741
+  s_31ffbce6ae9f06::t_dfcdc1e1ba5031 721-722,724,726,728-730,737-740,742-750
+crates/gpui_macos/src/window.rs
+  s_31ffbce6ae9f06::t_6e6e9158cbac33 97-100,109,112-113,119-120,122-127,2355-2360,2388-2401,3866-3869
+  s_31ffbce6ae9f06::t_1fd9087f1efb91 103-104
+  s_31ffbce6ae9f06::t_50149371a953ac 2378-2387,2402
+  s_31ffbce6ae9f06::t_d1a2ce0b540204 95-96,101-102,105-108,110-111,114-118,121,128-131
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "0b683d7c1384bbcb6e0c6c70512051d92bfbd0b9",
+  "prompts": {},
+  "sessions": {
+    "s_31ffbce6ae9f06": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a09009-667e-7ea2-a642-8e04d2228ba2",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "wangningtao <wangningtao@rongcloud.cn>"
+    }
+  }
+}

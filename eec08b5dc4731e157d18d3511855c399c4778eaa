@@ -1,0 +1,23 @@
+crates/gpui/src/interactive.rs
+  s_31ffbce6ae9f06::t_a0cecd6c09ca45 709-725
+crates/gpui_macos/src/window.rs
+  s_31ffbce6ae9f06::t_ce818878479ba7 2261-2264
+crates/gpui/src/platform/test/window.rs
+  s_31ffbce6ae9f06::t_18850a1fd5864f 483
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "eec08b5dc4731e157d18d3511855c399c4778eaa",
+  "prompts": {},
+  "sessions": {
+    "s_31ffbce6ae9f06": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a09009-667e-7ea2-a642-8e04d2228ba2",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "wangningtao <wangningtao@rongcloud.cn>"
+    }
+  }
+}
