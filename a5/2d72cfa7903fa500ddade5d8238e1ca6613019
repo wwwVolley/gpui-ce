@@ -1,0 +1,19 @@
+crates/gpui_linux/src/linux/wayland/client.rs
+  s_31ffbce6ae9f06::t_3a5a7b5c81c848 525-527
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a52d72cfa7903fa500ddade5d8238e1ca6613019",
+  "prompts": {},
+  "sessions": {
+    "s_31ffbce6ae9f06": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a09009-667e-7ea2-a642-8e04d2228ba2",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "wangningtao <wangningtao@rongcloud.cn>"
+    }
+  }
+}
